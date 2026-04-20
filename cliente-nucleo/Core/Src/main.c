@@ -60,6 +60,12 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t cmd = 0x5A; // solicitado pelo prof
+uint8_t contador;
+uint8_t tabela[100];
+
+volatile uint8_t pode_enviar = 1;
+volatile uint8_t eventos = 0;
 
 /* USER CODE END 0 */
 
@@ -96,6 +102,8 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_UART_Receive_IT(&huart1, &contador, 1); 
+  //HAL_UART_Receive_DMA(&huart1, tabela, sizeof(tabela)); teste de tamanho
 
   /* USER CODE END 2 */
 
@@ -106,6 +114,22 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if(pode_enviar == 1)  // faz o check e Só envia qndo permitido.
+    {
+      // envia info pro PC
+      char msg[50];
+      sprintf(msg, "Numero de eventos = %d\r\n", eventos);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+
+      // envia tabela via DMA (não trava CPU)
+      HAL_UART_Transmit_DMA(&huart2, tabela, sizeof(tabela));
+
+      // espera antes de enviar novamente
+      HAL_Delay(2000);
+
+      // opcional: trava até novo evento
+      pode_enviar = 0;
+    }
   }
   /* USER CODE END 3 */
 }
@@ -289,6 +313,38 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == GPIO_PIN_13) // botão nucleo
+    {
+        if(pode_enviar)
+        {
+            pode_enviar = 0;
+            HAL_UART_Transmit_IT(&huart1, &cmd, 1);
+        }
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if(huart->Instance == USART1)
+    {
+        eventos++;
+
+        // piscar LED contador vezes
+        for(int i=0; i<contador; i++)
+        {
+            HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+            HAL_Delay(500);
+            HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+            HAL_Delay(500);
+        }
+
+        pode_enviar = 1;
+
+        HAL_UART_Receive_IT(&huart1, &contador, 1);
+    }
+}
 
 /* USER CODE END 4 */
 

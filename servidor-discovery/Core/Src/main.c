@@ -70,6 +70,14 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t rx;
+uint8_t contador = 0;
+
+uint8_t tabela[] =
+"user 1 - 123...\n"
+"user 2 - 456...\n"
+"user 3 - 789...\n"
+"user 4 - 321...\n";
 
 /* USER CODE END 0 */
 
@@ -109,6 +117,7 @@ int main(void)
   MX_USB_HOST_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_UART_Receive_IT(&huart3, &rx, 1);
 
   /* USER CODE END 2 */
 
@@ -415,6 +424,32 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == GPIO_PIN_0) // botão discovery
+    {
+        contador++;
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if(huart->Instance == USART3)
+    {
+        if(rx == 0x5A)
+        {
+            // envia contador
+            HAL_UART_Transmit_IT(&huart3, &contador, 1);
+
+            // envia tabela via DMA
+            HAL_UART_Transmit_DMA(&huart3, tabela, sizeof(tabela));
+
+            contador = 0;
+        }
+
+        HAL_UART_Receive_IT(&huart3, &rx, 1);
+    }
+}
 
 /* USER CODE END 4 */
 
