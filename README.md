@@ -18,6 +18,8 @@ Implementação a comunicação UART, sobre os critérios:
 
 ---
 ## Objetivo
-> temos que realizar
+> temos que realizar uma comunicação de uma placa para outra, da mesma forma que é necessário que apareçam os logs na tela, via serial
+
+### Primeiro código de teste
 
 ---
