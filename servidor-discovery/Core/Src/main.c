@@ -1,3 +1,5 @@
+/* MAIN DA DISCOVERY */
+
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -70,6 +72,7 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t rx;
 
 /* USER CODE END 0 */
 
@@ -109,6 +112,7 @@ int main(void)
   MX_USB_HOST_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_UART_Receive_IT(&huart3, &rx, 1);
 
   /* USER CODE END 2 */
 
@@ -415,6 +419,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) //
+{
+    if(huart->Instance == USART3)
+    {
+        HAL_UART_Transmit(&huart3, &rx, 1, HAL_MAX_DELAY);
+        HAL_UART_Receive_IT(&huart3, &rx, 1);
+    }
+}
 
 /* USER CODE END 4 */
 
