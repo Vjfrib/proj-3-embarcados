@@ -4,6 +4,7 @@
 - CARLSON VASCONCELOS
 - LETICIA FONTENELLE
 - VINÍCIUS RIBEIRO
+
 ## Projeto
 Implementação a comunicação UART, sobre os critérios:
 
@@ -18,6 +19,6 @@ Implementação a comunicação UART, sobre os critérios:
 
 ---
 ## Objetivo
-> temos que realizar
+> temos que realizar a comunicação tanto pelo led qnto por DMA
 
 ---
