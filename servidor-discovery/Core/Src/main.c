@@ -1,3 +1,6 @@
+//Placa Discovery Firmware
+
+
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -19,6 +22,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_host.h"
+#include <string.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -51,6 +55,14 @@ UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
+/* USER CODE BEGIN PV */
+
+uint8_t rx;
+uint8_t contador = 0;
+
+char tabela[] = "Vinicius,123\nJoao,456\nMaria,789\n";
+
+/* USER CODE END PV */
 
 /* USER CODE END PV */
 
@@ -109,6 +121,7 @@ int main(void)
   MX_USB_HOST_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_UART_Receive_IT(&huart3, &rx, 1);
 
   /* USER CODE END 2 */
 
@@ -376,11 +389,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
   HAL_GPIO_Init(PDM_OUT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
+  /*Configure GPIO pin : PA0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BOOT1_Pin */
   GPIO_InitStruct.Pin = BOOT1_Pin;
@@ -409,12 +422,49 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(MEMS_INT2_GPIO_Port, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == GPIO_PIN_0)
+    {
+        contador++;
+
+        // só toggle, sem delay
+        HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if(huart->Instance == USART3)
+    {
+        if(rx == 0x5A)
+        {
+            //HAL_UART_Transmit_IT(&huart3, &contador, 1);
+            //HAL_UART_Transmit_DMA(&huart3, (uint8_t*)tabela, sizeof(tabela));
+        	HAL_UART_Transmit(&huart3, &contador, 1, 100);
+        	HAL_Delay(10); // pequeno delay
+
+        	//HAL_UART_Transmit(&huart3, (uint8_t*)tabela, sizeof(tabela), 100);
+        	uint16_t tamanho = strlen(tabela);
+        	HAL_UART_Transmit(&huart3, (uint8_t*)&tamanho, 2, 100);
+        	HAL_UART_Transmit(&huart3, (uint8_t*)tabela, tamanho, 100);
+
+            contador = 0;
+        }
+
+        HAL_UART_Receive_IT(&huart3, &rx, 1);
+    }
+}
 
 /* USER CODE END 4 */
 

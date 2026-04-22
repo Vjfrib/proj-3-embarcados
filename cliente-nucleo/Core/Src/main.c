@@ -1,3 +1,6 @@
+//Placa Nucleo Firmware
+
+
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -43,8 +46,27 @@
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
+
+#include <stdio.h>
+#include <string.h>
+
+uint8_t cmd = 0x5A;        // comando enviado ao servidor
+uint8_t contador_rx = 0;   // valor recebido
+uint8_t tabela_rx[100];    // tabela recebida via DMA
+
+char log_buffer[120];
+
+// máquina de estados
+typedef enum {
+    IDLE,
+    WAITING_SERVER,
+    PROCESSING
+} State_t;
+
+State_t estado = IDLE;
 
 /* USER CODE END PV */
 
@@ -60,7 +82,10 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void log_msg(char *msg)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+}
 /* USER CODE END 0 */
 
 /**
@@ -96,6 +121,11 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_UART_Receive_IT(&huart1, &contador_rx, 1);
+
+  // log
+  sprintf(log_buffer, "[INIT] Sistema iniciado...\r\n");
+  log_msg(log_buffer);
 
   /* USER CODE END 2 */
 
@@ -106,6 +136,34 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if(estado == PROCESSING)
+	  {
+	      sprintf(log_buffer, "[STATE] -> PROCESSING\r\n");
+	      log_msg(log_buffer);
+
+	      for(int i = 0; i < contador_rx; i++)
+	      {
+	          HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+	          HAL_Delay(500);
+	      }
+
+	      // garante que termina apagado
+	      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+
+	      sprintf(log_buffer, "[LED] Piscar concluido.\r\n");
+	      log_msg(log_buffer);
+
+	      char msg[50];
+	      sprintf(msg, "Numero de eventos = %d\r\n", contador_rx);
+	      HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, strlen(msg));
+
+	      //HAL_UART_Transmit_DMA(&huart2, tabela_rx, sizeof(tabela_rx));
+
+	      sprintf(log_buffer, "[UART2] Enviando tabela ao PC...\r\n");
+	      log_msg(log_buffer);
+
+	      estado = IDLE;
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -242,6 +300,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
+  /* DMA1_Channel7_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
 
 }
 
@@ -266,11 +327,11 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
@@ -289,6 +350,75 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == GPIO_PIN_13)
+    {
+        sprintf(log_buffer, "[BTN] Botao pressionado - enviando 0x5A...\r\n");
+        log_msg(log_buffer);
+
+        if(estado == IDLE)
+        {
+            HAL_UART_Transmit_IT(&huart1, &cmd, 1);
+
+            sprintf(log_buffer, "[UART1 TX] Comando enviado.\r\n");
+            log_msg(log_buffer);
+
+            estado = WAITING_SERVER;
+        }
+        else
+        {
+            sprintf(log_buffer, "[IGNORADO] Sistema ocupado\r\n");
+            log_msg(log_buffer);
+        }
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    // Recebe contador (1 byte)
+    if(huart->Instance == USART1 && estado == WAITING_SERVER)
+    {
+        sprintf(log_buffer, "[UART1 RX] Contador recebido: %d\r\n", contador_rx);
+        log_msg(log_buffer);
+
+        // inicia DMA
+        //HAL_UART_Receive_DMA(&huart1, tabela_rx, sizeof(tabela_rx));
+        HAL_UART_Receive_DMA(&huart1, tabela_rx, 40);
+
+        sprintf(log_buffer, "[DMA] Recebendo tabela...\r\n");
+        log_msg(log_buffer);
+
+        estado = PROCESSING;
+    }
+
+    // Recebe tabela completa (DMA terminou)
+    /*
+    else if(huart->Instance == USART1 && estado == PROCESSING)
+    {
+        sprintf(log_buffer, "[DMA RX] Tabela recebida!\r\n");
+        sprintf(log_buffer, "[TABELA RECEBIDA]:\r\n%s\r\n", tabela_rx);
+        log_msg(log_buffer);
+    }
+    */
+
+    // reativa recepção do contador
+    HAL_UART_Receive_IT(&huart1, &contador_rx, 1);
+}
+
+void HAL_UART_RxCpltCallback_DMA(UART_HandleTypeDef *huart)
+{
+    if(huart->Instance == USART1)
+    {
+        sprintf(log_buffer, "[DMA RX] Tabela recebida!\r\n");
+        log_msg(log_buffer);
+
+        sprintf(log_buffer, "[TABELA RECEBIDA]:\r\n%s\r\n", tabela_rx);
+        log_msg(log_buffer);
+
+        estado = IDLE;
+    }
+}
 
 /* USER CODE END 4 */
 
